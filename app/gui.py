@@ -12,23 +12,30 @@ from functools import partial
 class WarehouseFrame(Frame):
     def __init__(self):
         super().__init__()
+        #read the configs in the 'config' file. File must be at the same level as app folder
         self.config = configreader.ConfigReader()
         self.config.readconfig()
+
+        #gets the names designated for each serial
         self.names = [self.config.serial1['name'].strip(),
                     self.config.serial2['name'].strip(),
                     self.config.serial3['name'].strip(),
                 ]
 
+        #init serial manager -- serial manager manages all process involving serial port. Read and write to be exact
         self.initSerialPort()
+
+        #init db manager -- db manager manages all process involving database. SELECT, INSERT UPDATE and DELETE
         self._initdb_()
+
+        #init user interface
         self.initUI()
-        self.coWindowOpen = True;
+
+        #this is a flag that indicates that the system is waiting for a response after the scan button is pressed
         self._isWaiting = False;
 
     def initSerialPort(self):
         self._serialMan = serialManager.SerialManager(self.config, self.cbScan, self.cbCheckout)
-        #self._serialMan.initializeSystem()
-        #self.isCheckOutEnabled = self._serialMan.isCheckoutEnabled()
 
     def _initdb_(self):
         self._dbman = dbmanager.DbManager(self.config.username, self.config.pw
@@ -46,26 +53,40 @@ class WarehouseFrame(Frame):
         self.master.title("Item Manager")
         self.pack(fill=BOTH, expand=1)
 
+        #create tree view -- this is the table that will hold the data after query
         self.CreateTV()
+
+        #this loads the data into the treeview
         self.LoadTable()
 
+        #button for adding new items in the items table, calls CreateWindow function when clicked
         createButton = Button(self, text="Add Item", command=self.CreateWindow)
         createButton.pack(side=LEFT, padx=5, pady=5)
+
+        #button for deleting items from the items table, call DeleteWindow function when clicked
         deleteButton = Button(self, text="Delete Item", command=self.DeleteWindow)
         deleteButton.pack(side=LEFT, padx=5, pady=5)
+
+        #button for scanning, calls Scan function when clicked
         scanButton = Button(self, text="Scan", command=self.Scan)
         scanButton.pack(side=LEFT, padx=5, pady=5)
+
+        #button to initialize the readers based on the config file, calls SerialManagers initializesystem function
         startButton = Button(self, text="Start", command=self._serialMan.initializeSystem)
         startButton.pack(side=LEFT, padx=5, pady=5)
+
+        #button to add product in the products table, calls CreateProduct function
         prodButton = Button(self, text="Add Product", command=self.CreateProduct)
         prodButton.pack(side=LEFT, padx=5, pady=5)
 
+        #searching
         self.CreateSearchButton();
 
         quitButton = Button(self, text="Quit",
                 command=self.quit)
         quitButton.pack(side=RIGHT, padx = 5, pady = 5)
 
+        #this opens the checkout window
         self.checkoutWindow()
 
     def checkoutWindow(self):
@@ -78,7 +99,6 @@ class WarehouseFrame(Frame):
         self.cobutton = Button(self.coWin, text="Checkout", command=self.Checkout)
         self.cobutton.grid(row=2, column=1)
 
-        #self.cb()
 
     def Checkout(self):
         #do aggregation here
@@ -111,6 +131,8 @@ class WarehouseFrame(Frame):
             #update text
             epcs = []
             for c in tags:
+                #formats the epc in HEX format with zero padding 0xa -> 0A, 0xFF -> FF then concatenate
+                # 0xa0xff -> 0AFF
                 epc = ''.join('{:02x}'.format(t) for t in c[1]).strip().upper()
                 if epc not in self.collections and epc not in epcs:
                         epcs.append(epc)
@@ -130,31 +152,6 @@ class WarehouseFrame(Frame):
 
 
                 self.collections.extend(epcs)
-
-    def cb(self):
-        collection = self._serialMan.checkout()
-
-        if(len(collection) > 0):
-            #query product
-            #update text
-            epcs = []
-            for c in collection:
-                if c not in self.collections:
-                    epcs.append(''.join('{:2x}'.format(t) for t in c).strip())
-
-            query = 'SELECT * from items where EPC in ({})'.format(','.join("'{}'".format(e) for e in epcs))
-            result = self._dbman.executeCustomQuery(query)
-
-            if result[0] > 0:
-                text = []
-                for i in result[1]:
-                    text.append('Product:{} '.format(i['Product']))
-                status = self.items['text']
-                self.items['text'] = '{}\n{}'.format(status, '\n'.join(text))
-
-            self.collections.extend(epcs)
-
-        self.coWin.after(2000, self.cb)
 
     def CreateProduct(self, event=None):
         self.newwin = tk.Toplevel()
@@ -208,19 +205,6 @@ class WarehouseFrame(Frame):
         self.addbutton = Button(self.newwin, text="Add", command=self.Create)
         self.addbutton.grid(row=5, column=1)
 
-    def askRow(self, event=None):
-        self.newwin = tk.Toplevel()
-        self.newwin.title("Input Row")
-        self.rowlbl = Label(self.newwin, text="Name", width=6)
-        self.rowlbl.grid(row=0,column=0)
-        self.rowent = Entry(self.newwin,)
-        self.rowent.grid(row=0, column=1)
-
-        self.confirmbutton = Button(self.newwin, text="Confirm", command=self.registerProduct)
-        self.confirmbutton.grid(row=2, column=1)
-
-    def registerProduct(self):
-        row = self.rowent.get()
 
 
     def cbScan(self, tags):
@@ -229,6 +213,7 @@ class WarehouseFrame(Frame):
             confirmed_tags = []
             queried = []
             print('tags count: ',len(tags))
+            #checks if there are scanned tags
             if len(tags) > 0:
                 for tag in tags:
                     epc = ''.join('{:02x}'.format(t) for t in tag[1]).strip().upper()
@@ -240,6 +225,8 @@ class WarehouseFrame(Frame):
                             new_loc = self.names[tag[0] - 1]
                             old_loc = result[1][0]['Location']
                             product = result[1][0]['Product'].strip()
+
+                            #check if the tag has already been registered by checking if the location is empty
                             if old_loc == None:
                                 #update db
                                 row = simpledialog.askstring('Input Row', '{}: Enter row for: {}\nEPC:{}'.format(new_loc, product, epc))
@@ -248,6 +235,8 @@ class WarehouseFrame(Frame):
                                 result = self._dbman.executeCustomQuery(query)
                                 if 0 < result[0]:
                                     confirmed_tags.append((epc, product, new_loc))
+
+                            #check if the tag has been registered before but was relocated to other shelf
                             elif old_loc.split(':')[0].strip() != new_loc:
                                 #raise error and update db
                                 res = messagebox.askyesno('Notice!', 'Product with EPC:{} is originally from {} but was found in {}.\
@@ -255,7 +244,9 @@ class WarehouseFrame(Frame):
                                 if res:
                                     self.UpdateLoc(epc, new_loc)
 
+                        #this adds new tags that are not yet registered  in the EPC table,
                         else:
+                            #this query ignores if the EPC already exist in the DB. Inserts otherwise
                             query = "INSERT IGNORE INTO EPC(epc) values('{}')".format(epc)
                             result =self._dbman.executeCustomQuery(query)
                             if 0 < result[0]:
@@ -309,6 +300,7 @@ class WarehouseFrame(Frame):
 
 
     def Search(self,event=None):
+        #searches the items table based on the name of the product
         alllist = self._dbman.getAllWhere("product like '%{}%'".format(self.searchtext.get()))
 
         if(0 < alllist[0]):
