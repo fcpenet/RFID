@@ -1,0 +1,21 @@
+[DEFAULT]
+username=root
+password=geneva
+host=127.0.0.1
+db=warehouse
+port_name=/dev/cu.usbmodem1421
+baud_rate=115200
+
+#role=0, checkout, role=1,scan
+[SERIAL1]
+name=Siopao
+role=1
+
+[SERIAL2]
+name=Shelf1
+role=1
+
+[SERIAL3]
+name=Shelf2
+role=1
+
