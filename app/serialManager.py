@@ -80,6 +80,7 @@ class SerialManager:
             #check tag of resp
             #if 10 scan if 11 checkout
             print('X: ', resp)
+            #print(':'.join('{:02x}'.format(t,2) for t in resp))
             if (len(resp) > 0):
                 self._data.extend(resp)
                 if(resp[0] == 0x10):

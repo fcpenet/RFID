@@ -1,7 +1,7 @@
 import pymysql
 import sqlite3
 class ItemDict(dict):
-    _keys = {'epc':'varchar(50)', 'product':'varchar(20)', 'Location':'varchar(20)'}
+    _keys = {'epc':'varchar(50)', 'product':'varchar(20)', 'Location':'varchar(20)', 'hasCheckOut': 'int'}
     def __init__(self, *args):
         return
 

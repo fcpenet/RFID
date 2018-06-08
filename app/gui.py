@@ -5,7 +5,6 @@ from tkinter.ttk import Frame, Radiobutton, Button, Style, Label, Entry, Treevie
 import tkinter as tk
 import dbmanager
 import configreader
-import chartmaker
 import serialManager
 from functools import partial
 
@@ -33,7 +32,7 @@ class WarehouseFrame(Frame):
 
         #this is a flag that indicates that the system is waiting for a response after the scan button is pressed
         self._isWaiting = False;
-
+        self.queried = [];
     def initSerialPort(self):
         self._serialMan = serialManager.SerialManager(self.config, self.cbScan, self.cbCheckout)
 
@@ -113,7 +112,7 @@ class WarehouseFrame(Frame):
         res = messagebox.askyesno('Checkout Summary!', 'The following items will be checked out:\
     \n {} \nContinue?'.format('\n'.join(text)))
         if res:
-            query = "DELETE from items where EPC in ({})".format(','\
+            query = "UPDATE items SET hasCheckOut=0  where EPC in ({})".format(','\
                 .join("'{}'".format(e) for e in self.collections))
             result = self._dbman.executeCustomQuery(query)
             if result[0] > 0:
@@ -125,7 +124,8 @@ class WarehouseFrame(Frame):
                 messagebox.showinfo('Checkout Notice', "Something went wrong with the checkout")
 
     def cbCheckout(self, tags):
-        print('checkout cb')
+        print('XXXXXXXXXXXXXXXXXXXXXXXXXcheckout cb')
+        print('gui: tags -- ', tags)
         if(len(tags) > 0):
             #query product
             #update text
@@ -138,7 +138,7 @@ class WarehouseFrame(Frame):
                         epcs.append(epc)
 
             if(len(epcs) > 0):
-                query = "SELECT * from items where EPC in ({})".format(','.join("'{}'".format(e) for e in epcs))
+                query = "SELECT * from items where EPC in ({}) AND location!='' AND hasCheckOut=1".format(','.join("'{}'".format(e) for e in epcs))
                 result = self._dbman.executeCustomQuery(query)
 
                 if result[0] > 0:
@@ -147,11 +147,11 @@ class WarehouseFrame(Frame):
                         text.append('Product:{} '.format(i['Product']))
                     status = self.items['text']
                     self.items['text'] = '{}\n{}'.format(status, '\n'.join(text))
+                    self.collections.extend(epcs)
                 else:
                     messagebox.showinfo('Checkout Notice', "Item not registered")
 
 
-                self.collections.extend(epcs)
 
     def CreateProduct(self, event=None):
         self.newwin = tk.Toplevel()
@@ -208,54 +208,52 @@ class WarehouseFrame(Frame):
 
 
     def cbScan(self, tags):
-        if self._isWaiting:
+        confirmed_tags = []
+        print('tags count: ',len(tags))
+        #checks if there are scanned tags
+        if len(tags) > 0:
             self._isWaiting = False
-            confirmed_tags = []
-            queried = []
-            print('tags count: ',len(tags))
-            #checks if there are scanned tags
-            if len(tags) > 0:
-                for tag in tags:
-                    epc = ''.join('{:02x}'.format(t) for t in tag[1]).strip().upper()
-                    if epc != '':
-                        query = "SELECT Location, Product from items where epc='{}'".format(epc)
-                    if epc not in queried:
-                        result = self._dbman.executeCustomQuery(query)
-                        if(0 < result[0]):
-                            new_loc = self.names[tag[0] - 1]
-                            old_loc = result[1][0]['Location']
-                            product = result[1][0]['Product'].strip()
+            for tag in tags:
+                epc = ''.join('{:02x}'.format(t) for t in tag[1]).strip().upper()
+                if epc != '':
+                    query = "SELECT Location, Product from items where epc='{}' and hasCheckOut=1".format(epc)
+                if epc not in self.queried:
+                    result = self._dbman.executeCustomQuery(query)
+                    if(0 < result[0]):
+                        new_loc = self.names[tag[0] - 1]
+                        old_loc = result[1][0]['Location']
+                        product = result[1][0]['Product'].strip()
 
-                            #check if the tag has already been registered by checking if the location is empty
-                            if old_loc == None:
-                                #update db
-                                row = simpledialog.askstring('Input Row', '{}: Enter row for: {}\nEPC:{}'.format(new_loc, product, epc))
-                                query = "UPDATE items SET location='{}' WHERE epc='{}'".format('{} : {}'.format(new_loc, row), epc)
+                        #check if the tag has already been registered by checking if the location is empty
+                        if old_loc == None:
+                            #update db
+                            row = simpledialog.askstring('Input Row', '{}: Enter row for: {}\nEPC:{}'.format(new_loc, product, epc))
+                            query = "UPDATE items SET location='{}' WHERE epc='{}'".format('{} : {}'.format(new_loc, row), epc)
 
-                                result = self._dbman.executeCustomQuery(query)
-                                if 0 < result[0]:
-                                    confirmed_tags.append((epc, product, new_loc))
-
-                            #check if the tag has been registered before but was relocated to other shelf
-                            elif old_loc.split(':')[0].strip() != new_loc:
-                                #raise error and update db
-                                res = messagebox.askyesno('Notice!', 'Product with EPC:{} is originally from {} but was found in {}.\
-                        \nUpdate?'.format(epc, old_loc.strip(), new_loc))
-                                if res:
-                                    self.UpdateLoc(epc, new_loc)
-
-                        #this adds new tags that are not yet registered  in the EPC table,
-                        else:
-                            #this query ignores if the EPC already exist in the DB. Inserts otherwise
-                            query = "INSERT IGNORE INTO EPC(epc) values('{}')".format(epc)
-                            result =self._dbman.executeCustomQuery(query)
+                            result = self._dbman.executeCustomQuery(query)
                             if 0 < result[0]:
-                                messagebox.showinfo('Notice', "Product with EPC={} is not preregistered! Adding in EPC table".format(epc))
+                                confirmed_tags.append((epc, product, new_loc))
 
-                            else:
-                                messagebox.showinfo('Notice', "Cannot ADD EPC='{}' to table already exists".format(epc))
+                        #check if the tag has been registered before but was relocated to other shelf
+                        elif old_loc.split(':')[0].strip() != new_loc:
+                            #raise error and update db
+                            res = messagebox.askyesno('Notice!', 'Product with EPC:{} is originally from {} but was found in {}.\
+                    \nUpdate?'.format(epc, old_loc.strip(), new_loc))
+                            if res:
+                                self.UpdateLoc(epc, new_loc, product)
 
-                    queried.append(epc)
+                    #this adds new tags that are not yet registered  in the EPC table,
+                    else:
+                        #this query ignores if the EPC already exist in the DB. Inserts otherwise
+                        query = "INSERT IGNORE INTO EPC(epc) values('{}')".format(epc)
+                        result =self._dbman.executeCustomQuery(query)
+                        if 0 < result[0]:
+                            messagebox.showinfo('Notice', "Product with EPC={} is not preregistered! Adding in EPC table".format(epc))
+
+                        else:
+                            messagebox.showinfo('Notice', "Cannot ADD EPC='{}' to table already exists".format(epc))
+
+                self.queried.append(epc)
 
 
 
@@ -274,20 +272,19 @@ class WarehouseFrame(Frame):
 
                 #check for missing items:
                 for p in result[1]:
-                    print(p['epc'])
-                    print(queried)
-                    if p['epc'] not in queried:
+                    if p['epc'] not in self.queried:
                         messagebox.showinfo('Notice', "Product {} with EPC: {} missing from {}!".format(p['Product'], p['epc'], p['location']))
 
             self.LoadTable()
 
     def Scan(self):
         self._serialMan.scan(self.cbScan)
-        self._isWaiting = True;
+        self._isWaiting = True
+        self.queried = []
 
-    def UpdateLoc(self, epc, loc):
-        row = simpledialog.askstring('Input Row', '{}: Enter row for: {}\nEPC:{}'.format(new_loc, product, epc))
-        query = "UPDATE items SET location='{}' WHERE epc='{}'".format('{} : {}'.format(new_loc, row), epc)
+    def UpdateLoc(self, epc, loc, product):
+        row = simpledialog.askstring('Input Row', '{}: Enter row for: {}\nEPC:{}'.format(loc, product, epc))
+        query = "UPDATE items SET location='{}' WHERE epc='{}'".format('{} : {}'.format(loc, row), epc)
 
         result = self._dbman.executeCustomQuery(query)
         if 0 < result[0]:
@@ -367,18 +364,18 @@ class WarehouseFrame(Frame):
         e = dbmanager.ItemDict()
         e['epc'] = self.epccombo.get()
         e['product'] = self.prodcombo.get()
+        e['hasCheckOut'] = 1
         result = self._dbman.AddToTable('items', e)
 
-        if(-1 == result):
-            messagebox.showinfo('Create Notice', "Create one or more items failed!")
-        else:
-            query = "DELETE FROM epc where epc='{}'".format(self.epccombo.get())
-            result = self._dbman.executeCustomQuery(query)
-            if 0 > result[0]:
-                messagebox.showinfo('Notice', "Something happended EPC='{}'".format(epc))
-            messagebox.showinfo('Create Notice', "Create success!")
-            self.newwin.destroy()
-            self.LoadTable()
+        query = 'INSERT INTO items(epc, product, location, hasCheckOut) values("{0}", "{1}","", 1) ON DUPLICATE key update product="{1}", hasCheckOut=1'.format(self.epccombo.get(), self.prodcombo.get())
+        result = self._dbman.executeCustomQuery(query)
+        query = "DELETE FROM epc where epc='{}'".format(self.epccombo.get())
+        result = self._dbman.executeCustomQuery(query)
+        if 0 > result[0]:
+            messagebox.showinfo('Notice', "Something happended EPC='{}'".format(epc))
+        messagebox.showinfo('Create Notice', "Create success!")
+        self.newwin.destroy()
+        self.LoadTable()
 
     def CreateTV(self):
         self.tv = Treeview(self.tableframe)
@@ -395,7 +392,8 @@ class WarehouseFrame(Frame):
         vsb.pack(side='right', fill='y')
 
     def LoadTable(self):
-        alllist = self._dbman.executeCustomQuery('call get_summary')[1]
+        query = 'select  Product, Location, sum(hasCheckOut) as Quantity from items where location!=""  group by Product, Location'
+        alllist = self._dbman.executeCustomQuery(query)[1]
 
         for i in self.tv.get_children():
             self.tv.delete(i)
