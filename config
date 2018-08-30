@@ -3,7 +3,7 @@ username=root
 password=geneva
 host=127.0.0.1
 db=warehouse
-port_name=/dev/cu.usbmodem24
+port_name=/dev/cu.usbmodem1411
 baud_rate=115200
 
 #role=0, checkout, role=1,scan
@@ -13,9 +13,9 @@ role=1
 
 [SERIAL2]
 name=Shelf2
-role=1
+role=0
 
 [SERIAL3]
 name=Shelf3
-role=0
+role=1
 
