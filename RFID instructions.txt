@@ -1,0 +1,25 @@
+1. MAKE SURE THAT YOU Install the following:
+Python 3.6.6
+mysql 5.7.24  -- brew install mysql
+Git
+
+2. Clone the code repository in any folder desired using the command:
+git clone https://github.com/fcpenet/RFID.git
+3. Copy the file arduino/softwareserialtest1.ino to a folder for arduino application.
+4. Open the arduino application and upload the copied file to the arduino device.
+5. Go to the cloned repository folder and then open a terminal
+6. Start the mysql: brew services start mysql
+7. Login to the terminal: mysql -u root
+8. Create database: create database warehouse;
+9. Logout from terminal: \q
+10. Apply config to the created database: mysql -u root warehouse < rfid.sql
+11. Login to mysql terminal: mysql -u root
+12. Make sure that the configurations are applied: use warehouse; show tables;
+13. Make sure that the tables are created.
+14. Make sure that port name in the config file is the same as the port name shown in arduino.
+15. Go to the cloned folder rfid: cd rfid
+16. Install python virtualenv: pip install virtualenv
+17. THIS IS IMPORTANT!! Create a virtual env: python -m virtualenv virtualenv
+18. Enter virtualenv: source virtualenv/bin/activate
+19. Install dependencies: pip install -r requirements.txt
+20. Run the app: python app/gui.py
